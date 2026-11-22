@@ -40,14 +40,14 @@
     <table class="data-table">
       <thead>
         <tr>
-          <th v-for="column in meta.fields" :key="column">{{ column }}</th>
+          <th v-for="column in tableColumns" :key="column">{{ column }}</th>
           <th>当前状态</th>
           <th>可执行动作</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="row in rows" :key="String(row.id)" :data-testid="`row-${row.id}`" :data-status="String(row.status)">
-          <td v-for="column in meta.fields" :key="column">{{ row[column] ?? '—' }}</td>
+          <td v-for="column in tableColumns" :key="column">{{ row[column] ?? '—' }}</td>
           <td>{{ row.status }}</td>
           <td class="row-actions">
             <button
@@ -63,7 +63,7 @@
           </td>
         </tr>
         <tr v-if="!rows.length">
-          <td :colspan="meta.fields.length + 2" class="empty-state">
+          <td :colspan="tableColumns.length + 2" class="empty-state">
             暂无{{ meta.name }}数据，可先登记{{ meta.entity }}
           </td>
         </tr>
@@ -73,9 +73,9 @@
     <div v-if="showCreate" class="modal-backdrop" data-testid="create-modal">
       <form class="modal" @submit.prevent="submitCreate">
         <h3>登记{{ meta.entity }}</h3>
-        <label v-for="field in meta.fields" :key="field" class="create-field">
+        <label v-for="field in createFields" :key="field" class="create-field">
           <span>{{ field }}</span>
-          <input v-model="createValues[field]" :data-testid="`create-${field}`" required />
+          <input v-model="createValues[field]" :data-testid="`create-${field}`" :required="meta.fields.includes(field)" />
         </label>
         <div class="page-actions">
           <button class="btn" type="button" @click="showCreate = false">取消</button>
@@ -111,10 +111,12 @@ const rows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
-const filterFields = meta.fields.slice(0, 3)
+const filterFields = meta.fields.slice(0, 4)
 const showCreate = ref(false)
 const creating = ref(false)
 const createValues = ref<Record<string, string>>({})
+const tableColumns = [...meta.fields, ...(meta.extraColumns ?? [])]
+const createFields = [...meta.fields, ...(meta.formFields ?? [])]
 const stats = computed(() => [
   { label: meta.metrics[0], value: total.value },
   { label: meta.metrics[1], value: rows.value.filter((row) => row.status === meta.statuses[1]).length },
@@ -145,7 +147,7 @@ async function exportRows() {
 }
 
 function openCreate() {
-  createValues.value = Object.fromEntries(meta.fields.map((field) => [field, '']))
+  createValues.value = Object.fromEntries(createFields.map((field) => [field, '']))
   errorMessage.value = ''
   showCreate.value = true
 }

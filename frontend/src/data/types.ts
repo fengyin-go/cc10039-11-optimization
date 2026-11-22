@@ -14,6 +14,10 @@ export type ModuleMeta = {
   entity: string
   desc: string
   fields: string[]
+  // 登记表单额外的可选字段（不进入列表主列，但决定分区口径）
+  formFields?: string[]
+  // 列表里补充展示的口径字段
+  extraColumns?: string[]
   statuses: string[]
   actions: string[]
   actionTargets: Record<string, string>

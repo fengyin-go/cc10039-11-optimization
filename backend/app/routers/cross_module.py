@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from app.services import service_for, SERVICES
 from app.store import store
+from app.services.partition_handover import coverage_items
 from app.services.partition_policy import PartitionPolicyService
 from app.services.lake_table import LakeTableService
 from app.services.storage_tier import StorageTierService
@@ -54,6 +55,37 @@ def list_snapshots() -> dict[str, Any]:
 def cross_module_overview() -> dict[str, Any]:
     """跨模块统计概览。"""
     return store.cross_module_stats()
+
+
+@router.get("/partition-handovers")
+def list_partition_handovers(
+    table_name: str | None = Query(default=None),
+    task_no: str | None = Query(default=None),
+) -> dict[str, Any]:
+    """归档交接分区清单：记录待调度任务对应的策略版本、粒度和数据范围。"""
+    items = store.handovers(table_name=table_name, task_no=task_no)
+    return {"total": len(items), "items": items}
+
+
+@router.get("/compaction-runs")
+def list_compaction_runs(
+    table_name: str | None = Query(default=None),
+    task_no: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+) -> dict[str, Any]:
+    """合并调度记录：含实际领取的粒度、日期范围以及失败原因。"""
+    items = store.compaction_runs(table_name=table_name, task_no=task_no)
+    if status:
+        items = [item for item in items if item.get("状态") == status]
+    return {"total": len(items), "items": items}
+
+
+@router.get("/partition-coverage")
+def partition_coverage(
+    table_name: str = Query(..., min_length=1),
+) -> dict[str, Any]:
+    """按湖表核对分区日期覆盖，并识别新旧粒度是否处理了同一输入。"""
+    return coverage_items(table_name)
 
 
 @router.get("/pipeline-status")

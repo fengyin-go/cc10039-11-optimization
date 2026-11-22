@@ -21,6 +21,10 @@ class Store:
         self._events: list[dict[str, Any]] = []
         # 模块快照备份：用于检查点和恢复
         self._snapshots: dict[str, list[dict[str, Any]]] = {}
+        # 归档交接分区清单：旧策略归档时把待调度任务的输入锁存下来
+        self._handovers: list[dict[str, Any]] = []
+        # 合并调度记录：每次触发实际领取到的输入留痕，失败请求也记
+        self._compaction_runs: list[dict[str, Any]] = []
 
     # ---- 基础读写 ----
 
@@ -38,9 +42,10 @@ class Store:
 
     def find_by_field(self, module: str, field: str, value: str) -> list[dict[str, Any]]:
         """按指定字段值查找记录，支持跨模块关联查询。"""
+        expected = str(value or "").casefold()
         return [
             row for row in self.rows(module)
-            if str(row.get(field, "")).casefold() == value.casefold()
+            if str(row.get(field, "") or "").casefold() == expected
         ]
 
     def upsert(self, module: str, entry: dict[str, Any]) -> dict[str, Any]:
@@ -85,6 +90,49 @@ class Store:
             e for e in self._events
             if e["source_module"] == source and e["target_module"] == target
         ]
+
+    # ---- 归档交接分区清单 ----
+
+    def next_handover_id(self) -> int:
+        return max((int(item.get("id", 0)) for item in self._handovers), default=0) + 1
+
+    def add_handover(self, entry: dict[str, Any]) -> dict[str, Any]:
+        self._handovers.append(entry)
+        return entry
+
+    def handovers(
+        self, *, table_name: str | None = None, task_no: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """查询交接清单；不传条件时返回全部。"""
+        items = list(self._handovers)
+        if table_name:
+            items = [item for item in items if item.get("目标湖表") == table_name]
+        if task_no:
+            items = [item for item in items if item.get("任务编号") == task_no]
+        return items
+
+    # ---- 合并调度记录 ----
+
+    def next_run_no(self) -> str:
+        return f"RUN-{len(self._compaction_runs) + 1:04d}"
+
+    def add_compaction_run(self, entry: dict[str, Any]) -> dict[str, Any]:
+        self._compaction_runs.append(entry)
+        return entry
+
+    def compaction_runs(
+        self, *, table_name: str | None = None, task_no: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """查询调度记录；失败请求同样留痕，可按来源任务追溯。"""
+        items = list(self._compaction_runs)
+        if table_name:
+            items = [item for item in items if item.get("目标湖表") == table_name]
+        if task_no:
+            items = [
+                item for item in items
+                if item.get("任务编号") == task_no or item.get("请求任务编号") == task_no
+            ]
+        return items
 
     # ---- 快照与检查点 ----
 

@@ -53,6 +53,12 @@ class BaseModuleService:
         rows = store.rows(self.MODULE)
         entry = {"id": max((int(row.get("id", 0)) for row in rows), default=0) + 1}
         entry.update({field: values.get(field) for field in self.LIST_FIELDS})
+        # 显式传入的补充字段（如分区粒度、数据范围）一并保留；系统字段不接受外部写入
+        reserved = {"id", "status", "pending", "abnormal"}
+        for field, value in values.items():
+            if field in entry or field in reserved or value in (None, ""):
+                continue
+            entry[field] = value
         entry["status"] = self.STATUS_ORDER[0]
         entry["pending"] = True
         entry["abnormal"] = False
